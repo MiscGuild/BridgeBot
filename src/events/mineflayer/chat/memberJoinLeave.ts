@@ -164,8 +164,23 @@ export default {
 											leaveDate: null,
 										},
 									];
+
+									let existingData = [];
+									try {
+										const data = fs.readFileSync("joinDate.json", "utf-8");
+										if (!data.trim()) {
+											console.log("The joinDate.json file is empty.");
+											return;
+										}
+										existingData = JSON.parse(data);
+									} catch (error) {
+										console.error("Error reading or parsing joinDate.json:", error);
+									}
+
+									existingData.push(playerJoinDate);
+
 									// If files exists, append the new data to the file
-									const joinDateJSON = JSON.stringify(playerJoinDate, null, 2);
+									const joinDateJSON = JSON.stringify(existingData, null, 2);
 
 									fs.writeFileSync("joinDate.json", joinDateJSON);
 									console.log("Data has been written to the file");
@@ -207,7 +222,7 @@ export default {
 						// Find the UUID in the joinDate.json file. If it doesn't exists, return "Player not found, did they join before this script was made?"
 						const playerIndex = playerJoinDateJSON.findIndex(
 							(player: { player: string }) => player.player === uuid,
-						);	
+						);
 						if (playerIndex === -1) {
 							console.log("Player not found, did they join before this script was made?");
 							await bot.sendToDiscord(
