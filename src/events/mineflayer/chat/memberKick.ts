@@ -17,11 +17,22 @@ export default {
 			try {
 				// Get the UUID of the new member from the Hypixel API
 				const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${playerName}`);
-				if (response.status === 403) {
-					console.error("Error: The Mojang API returned a 403 status code.");
+				const bodyText = await response.text();
+				
+				if (bodyText.includes("<!DOCTYPE")) {
+					console.error("Error: The Mojang API returned a HTML response and thus being rate limited. Also sending this to Discord.");
+
+					await bot.sendToDiscord(
+						"oc",
+						`Received a HTML response from the Mojang API when trying to get the UUID of **${escapeMarkdown(playerName)}**. This means the API is being rate limited. This is a bug and should be fixed ASAP.`,
+						"#ff0000",
+						true,
+					);
 					return;
-				} else await response.json();
-				const uuid = (await response.json()).id;
+				}
+		
+				const uuidData = JSON.parse(bodyText);
+				const uuid = uuidData.id;
 				console.log(uuid);
 
 				try {
