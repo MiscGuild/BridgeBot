@@ -17,6 +17,10 @@ export default {
 			try {
 				// Get the UUID of the new member from the Hypixel API
 				const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${playerName}`);
+				if (response.status === 403) {
+					console.error("Error: The Mojang API returned a 403 status code.");
+					return;
+				} else await response.json();
 				const uuid = (await response.json()).id;
 				console.log(uuid);
 
@@ -27,7 +31,6 @@ export default {
 						return;
 					}
 					const playerJoinDateJSON = JSON.parse(playerJoinDate);
-					console.log("playerJoinDateJSON:", playerJoinDateJSON);
 
 					// Find the UUID in the joinDate.json file. If it doesn't exists, return "Player not found, did they join before this script was made?"
 					const playerIndex = playerJoinDateJSON.findIndex(
@@ -39,21 +42,32 @@ export default {
 							"oc",
 							`${Emojis.negativeGuildEvent} **${escapeMarkdown(
 								playerName,
-							)}** left the guild. They joined before this script was made.`,
+							)}** left the guild forcefully. They joined before this script was made. They were kicked by **${escapeMarkdown(kickedByPlayerName)}**`,
 							"#ff0000",
 							true,
 						);
 						return;
 					}
+					console.log("Player found in the joinDate.json file.");
 					console.log(playerIndex);
 					// Get the current date
 					const leaveDate = new Date();
 					playerJoinDateJSON[playerIndex].leaveDate = leaveDate.toISOString();
 					console.log("Updated Player Object:", playerJoinDateJSON[playerIndex]);
 
-					// Write the updated data back to the file
-					fs.writeFileSync("joinDate.json", JSON.stringify(playerJoinDateJSON, null, 2));
-					console.log("Data has been written to the file");
+					const updatedJson = [
+						...playerJoinDateJSON.slice(0, playerIndex),
+						playerJoinDateJSON[playerIndex],
+						...playerJoinDateJSON.slice(playerIndex + 1),
+					];
+
+					fs.writeFile("joinDate.json", JSON.stringify(updatedJson, null, 2), (err) => {
+						if (err) {
+							console.error("Error writing to file joinDate.json:", err);
+							return;
+						}
+						console.log("Data has been written to the file. Player left: ", playerName, ", kicked by: ", kickedByPlayerName);
+					});
 
 					// Send the difference in years, days and mintues between the join and leave date to discord
 					const joinDate = new Date(playerJoinDateJSON[playerIndex].joinDate);
@@ -65,9 +79,7 @@ export default {
 						"oc",
 						`${Emojis.negativeGuildEvent} **${escapeMarkdown(
 							playerName,
-						)}** left the guild after **${years} years, ${days} days and ${minutes} minutes**. They were kicked by  **${
-							kickedByRank ? kickedByRank + " " : ""
-						}${escapeMarkdown(kickedByPlayerName)}**`,
+						)}** left the guild after **${years} years, ${days} days and ${minutes} minutes**. They were kicked by **${escapeMarkdown(kickedByPlayerName)}**`,
 						"#ff0000",
 						true,
 					);
@@ -78,7 +90,6 @@ export default {
 				console.error("Error reading or parsing joinDate.json:", error);
 			}
 		}
-
 		await updateLeaveData(playerName);
 
 		await bot.sendToDiscord(

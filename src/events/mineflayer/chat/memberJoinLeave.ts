@@ -12,7 +12,9 @@ export default {
 	name: "chat:memberJoinLeave",
 	runOnce: false,
 	run: async (bot, rank: string | undefined, playerName: string, type: "joined" | "left") => {
+
 		if (type === "joined") {
+
 			const mojangProfile = await fetchMojangProfile(playerName);
 
 			if (!isFetchError(mojangProfile) && isUserBlacklisted(mojangProfile.id)) {
@@ -20,9 +22,7 @@ export default {
 					`/g kick ${playerName} You have been blacklisted from the guild. Mistake? --> ${process.env.DISCORD_INVITE_LINK}`,
 				);
 			}
-		}
 
-		if (type === "joined") {
 			await new Promise((resolve) => {
 				bot.executeTask(`/g log ${playerName} 1`);
 				let chatListener2: BotEvents["message"];
@@ -32,8 +32,7 @@ export default {
 				const hourMinuteRegex = "(([0-9]{2}):([0-9]{2}))";
 				const timezoneRegex = "((EDT|EST): )";
 				const usernameRegex = "([A-Za-z-0-9-_]{2,27})";
-				const actionRegex =
-					"(joined|left|invited|kicked|muted|unmuted|set rank of|set MOTD|set guild tag|set guild tagcolor)";
+				const actionRegex = "(joined|left|invited|kicked|muted|unmuted|set rank of|set MOTD|set guild tag|set guild tagcolor)";
 				const optionalSpaceRegex = "(?:\\s)?";
 				const optionalToRegex = "(stos)?";
 				const optionalSecondUsernameRegex = `(${usernameRegex})?`;
@@ -99,30 +98,53 @@ export default {
 									resolve(invitedPlayer);
 									bot.mineflayer.removeListener("message", chatListener2);
 
-									async function updateJoinData(playerName: string) {
-										try {
-											const response = await fetch(
-												`https://api.mojang.com/users/profiles/minecraft/${playerName}`,
-											);
-											const uuid = (await response.json()).id;
-											console.log(uuid);
+									async function logJoinDate(playerName: string) {
+										// Get the UUID of the new member from the Mojang API
+										const response = await fetch(
+											`https://api.mojang.com/users/profiles/minecraft/${playerName}`,
+										);
+										const uuid = (await response.json()).id;
+										console.log(uuid);
 
-											const playerJoinData = [
+										fs.readFile("joinDate.json", "utf-8", (err, data) => {
+											if (err) {
+												console.error("Error reading file joinDate.json", err);
+												return;
+											}
+
+											let jsonData: any;
+											try {
+												jsonData = JSON.parse(data);
+											} catch (error) {
+												console.error("Error parsing JSON data:", error);
+												return;
+											}
+
+											const updatedData = [
+												...jsonData,
 												{
 													player: uuid,
-													username: playerName,
+													userName: playerName,
 													joinDate: new Date(),
 													leaveDate: null,
 												},
 											];
 
-											fs.writeFileSync("joinDate.json", JSON.stringify(playerJoinData, null, 2));
-											console.log("Data has been written to the file");
-										} catch (error) {
-											console.error(error);
-										}
+											const updatedJson = JSON.stringify(updatedData, null, 2);
+											fs.writeFile("joinDate.json", updatedJson, (err) => {
+												if (err) {
+													console.error("Error writing to file joinDate.json:", err);
+													return;
+												}
+												console.log(
+													"Data has been written to the file. New player added: ",
+													playerName,
+												);
+											});
+										});
 									}
-									updateJoinData(playerName);
+
+									logJoinDate(playerName);
 								} else if (counter === 2) {
 									await bot.sendToDiscord(
 										"oc",
@@ -147,45 +169,52 @@ export default {
 										additionalInfo,
 									);
 
-									// Get the UUID of the new member from the Hypixel API
-									const response = await fetch(
-										`https://api.mojang.com/users/profiles/minecraft/${playerName}`,
-									);
-									const uuid = (await response.json()).id;
-									console.log(uuid);
+									async function logJoinDate(playerName: string) {
+										// Get the UUID of the new member from the Mojang API
+										const response = await fetch(
+											`https://api.mojang.com/users/profiles/minecraft/${playerName}`,
+										);
+										const uuid = (await response.json()).id;
+										console.log(uuid);
 
-									// Enter the player UUID with their join date into the joinDate.json file
+										fs.readFile("joinDate.json", "utf-8", (err, data) => {
+											if (err) {
+												console.error("Error reading file joinDate.json", err);
+												return;
+											}
 
-									const playerJoinDate = [
-										{
-											player: uuid,
-											username: playerName,
-											joinDate: new Date(),
-											leaveDate: null,
-										},
-									];
+											let jsonData: any;
+											try {
+												jsonData = JSON.parse(data);
+											} catch (error) {
+												console.error("Error parsing JSON data:", error);
+												return;
+											}
 
-									let existingData = [];
-									try {
-										const data = fs.readFileSync("joinDate.json", "utf-8");
-										if (!data.trim()) {
-											console.log("The joinDate.json file is empty.");
-											return;
-										}
-										existingData = JSON.parse(data);
-									} catch (error) {
-										console.error("Error reading or parsing joinDate.json:", error);
+											const updatedData = [
+												...jsonData,
+												{
+													player: uuid,
+													userName: playerName,
+													joinDate: new Date(),
+													leaveDate: null,
+												},
+											];
+
+											const updatedJson = JSON.stringify(updatedData, null, 2);
+											fs.writeFile("joinDate.json", updatedJson, (err) => {
+												if (err) {
+													console.error("Error writing to file joinDate.json:", err);
+													return;
+												}
+												console.log(
+													"Data has been written to the file. New player added: ",
+													playerName,
+												);
+											});
+										});
 									}
-
-									existingData.push(playerJoinDate);
-
-									// If files exists, append the new data to the file
-									const joinDateJSON = JSON.stringify(existingData, null, 2);
-
-									fs.writeFileSync("joinDate.json", joinDateJSON);
-									console.log("Data has been written to the file");
-
-									//The above is only to catch all the data and TypeScript wants me to use it.
+									logJoinDate(playerName);
 								}
 							}
 						}
@@ -208,9 +237,24 @@ export default {
 				try {
 					// Get the UUID of the new member from the Hypixel API
 					const response = await fetch(`https://api.mojang.com/users/profiles/minecraft/${playerName}`);
-					const uuid = (await response.json()).id;
-					console.log(uuid);
+					const bodyText = await response.text();
+					
+					if (bodyText.includes("<!DOCTYPE")) {
+						console.error("Error: The Mojang API returned a HTML response and thus being rate limited. Also sending this to Discord.");
 
+						await bot.sendToDiscord(
+							"oc",
+							`Received a HTML response from the Mojang API when trying to get the UUID of **${escapeMarkdown(playerName)}**. This means the API is being rate limited. This is a bug and should be fixed ASAP.`,
+							"#ff0000",
+							true,
+						);
+						return;
+					}
+			
+					const uuidData = JSON.parse(bodyText);
+					const uuid = uuidData.id;
+					console.log(uuid);
+			
 					try {
 						const playerJoinDate = fs.readFileSync("joinDate.json", "utf-8");
 						if (!playerJoinDate.trim()) {
@@ -218,8 +262,8 @@ export default {
 							return;
 						}
 						const playerJoinDateJSON = JSON.parse(playerJoinDate);
-
-						// Find the UUID in the joinDate.json file. If it doesn't exists, return "Player not found, did they join before this script was made?"
+			
+						// Find the UUID in the joinDate.json file. If it doesn't exist, return "Player not found..."
 						const playerIndex = playerJoinDateJSON.findIndex(
 							(player: { player: string }) => player.player === uuid,
 						);
@@ -235,17 +279,29 @@ export default {
 							);
 							return;
 						}
+			
+						console.log("Player found in the joinDate.json file.");
 						console.log(playerIndex);
 						// Get the current date
 						const leaveDate = new Date();
 						playerJoinDateJSON[playerIndex].leaveDate = leaveDate.toISOString();
 						console.log("Updated Player Object:", playerJoinDateJSON[playerIndex]);
-
-						// Write the updated data back to the file
-						fs.writeFileSync("joinDate.json", JSON.stringify(playerJoinDateJSON, null, 2));
-						console.log("Data has been written to the file");
-
-						// Send the difference in years, days and mintues between the join and leave date to discord
+			
+						const updatedJson = [
+							...playerJoinDateJSON.slice(0, playerIndex),
+							playerJoinDateJSON[playerIndex],
+							...playerJoinDateJSON.slice(playerIndex + 1),
+						];
+			
+						fs.writeFile("joinDate.json", JSON.stringify(updatedJson, null, 2), (err) => {
+							if (err) {
+								console.error("Error writing to file joinDate.json:", err);
+								return;
+							}
+							console.log("Data has been written to the file. Player left: ", playerName);
+						});
+			
+						// Send the difference in years, days and minutes between the join and leave date to discord
 						const joinDate = new Date(playerJoinDateJSON[playerIndex].joinDate);
 						const difference = leaveDate.getTime() - joinDate.getTime();
 						const years = Math.floor(difference / 31536000000);
@@ -266,8 +322,7 @@ export default {
 					console.error("Error reading or parsing joinDate.json:", error);
 				}
 			}
-
-			await updateLeaveData(playerName);
+			await updateLeaveData(playerName);			
 		}
 		return;
 	},
